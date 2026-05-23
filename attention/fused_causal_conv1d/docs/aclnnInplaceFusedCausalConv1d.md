@@ -1,4 +1,4 @@
-# aclnnFusedCausalConv1d
+# aclnnInplaceFusedCausalConv1d
 
 [📄 查看源码](https://gitcode.com/cann/ops-transformer/tree/master/attention/fused_causal_conv1d)
 
@@ -15,7 +15,7 @@
 
 ## 功能说明
 
-- 接口功能：对序列执行因果一维卷积，沿序列维度使用缓存数据（长度为卷积核宽减1）对各序列头部进行padding，确保输出依赖当前及历史输入；卷积完成后，将当前序列部分数据更新到缓存；在因果一维卷积输出的基础上，将原始输入加到输出上以实现残差连接。支持 APC（Automatic Prefix Caching）、MTP（投机解码）、残差连接等特性。相较于标准 causal_conv1d 算子，本算子新增 APC 缓存复用、PD混部、残差连接可选等功能。<br>
+- 接口功能：对序列执行因果一维卷积，沿序列维度使用缓存数据（长度为卷积核宽减1）对各序列头部进行padding，确保输出依赖当前及历史输入；卷积完成后，将当前序列部分数据更新到缓存；在因果一维卷积输出的基础上，将原始输入加到输出上以实现残差连接。支持 APC（Automatic Prefix Caching）、MTP（投机解码）、残差连接、原地更新等特性。相较于标准 causal_conv1d 算子，本算子新增 APC 缓存复用、PD混部、残差连接可选等功能。<br>
 
 - 支持以下场景：
   - 场景一（prefill场景）：
@@ -40,7 +40,6 @@
     residual_connection: 不做残差: 0, 做残差：1
     block_size: 典型值 128/256
     conv_mode：Qwen3-Next模式: 0, Pangu V2: 1
-    y: [cu_seq_len, dim]
     ```
 
     其中cu_seq_len为batch内所有变长序列拼接后的总长度。
@@ -67,7 +66,6 @@
     residual_connection: 不做残差: 0, 做残差：1
     block_size: 典型值 128/256
     conv_mode：Qwen3-Next模式: 0, Pangu V2: 1
-    y: [cu_seq_len, dim]
     ```
 
     其中cu_seq_len为batch内所有变长序列拼接后的总长度。
@@ -94,7 +92,6 @@
     residual_connection: 不做残差: 0, 做残差：1
     block_size: 典型值 128/256
     conv_mode：Qwen3-Next模式: 0, Pangu V2: 1
-    y: [cu_seq_len, dim]
     ```
 
     其中state_len必须大于所有batch中最大的token个数加1。
@@ -121,7 +118,6 @@
     residual_connection: 不做残差: 0, 做残差：1
     block_size: 典型值 128/256
     conv_mode：Qwen3-Next模式: 0, Pangu V2: 1
-    y: [batch, m+1, dim]
     ```
 
 - 计算公式：
@@ -266,11 +262,11 @@
 
 ## 函数原型
 
-每个算子分为[两段式接口](../../../docs/zh/context/两段式接口.md)，必须先调用 `aclnnFusedCausalConv1dGetWorkspaceSize`接口获取入参并计算所需workspace大小以及包含了算子计算流程的执行器，再调用`aclnnFusedCausalConv1d`接口执行计算。
+每个算子分为[两段式接口](../../../docs/zh/context/两段式接口.md)，必须先调用 `aclnnInplaceFusedCausalConv1dGetWorkspaceSize`接口获取入参并计算所需workspace大小以及包含了算子计算流程的执行器，再调用`aclnnInplaceFusedCausalConv1d`接口执行计算。
 
 ```Cpp
-aclnnStatus aclnnFusedCausalConv1dGetWorkspaceSize(
-  const aclTensor *x,
+aclnnStatus aclnnInplaceFusedCausalConv1dGetWorkspaceSize(
+  aclTensor       *x,
   const aclTensor *weight,
   aclTensor       *convStates,
   const aclTensor *queryStartLoc,
@@ -289,20 +285,19 @@ aclnnStatus aclnnFusedCausalConv1dGetWorkspaceSize(
   int64_t          residualConnection,
   int64_t          blockSize,
   int64_t          convMode,
-  aclTensor       *y,
   uint64_t        *workspaceSize,
   aclOpExecutor  **executor)
 ```
 
 ```Cpp
-aclnnStatus aclnnFusedCausalConv1d(
+aclnnStatus aclnnInplaceFusedCausalConv1d(
   void          *workspace,
   uint64_t       workspaceSize,
   aclOpExecutor *executor,
   aclrtStream    stream)
 ```
 
-## aclnnFusedCausalConv1dGetWorkspaceSize
+## aclnnInplaceFusedCausalConv1dGetWorkspaceSize
 
 - **参数说明**：
 
@@ -331,8 +326,8 @@ aclnnStatus aclnnFusedCausalConv1d(
   <tbody>
     <tr>
       <td>x（aclTensor*）</td>
-      <td>输入</td>
-      <td>计算公式中的x，代表输入序列。</td>
+      <td>输入/输出</td>
+      <td>计算公式中的x，代表输入序列。卷积结果将原地更新至x。</td>
       <td><ul><li>不支持空tensor。</li><li>prefill场景：shape为[cu_seq_len, dim]。</li><li>decode场景：shape为[cu_seq_len, dim]或[batch, seq_len, dim]。</li></ul></td>
       <td>FLOAT16、BFLOAT16</td>
       <td>ND</td>
@@ -520,16 +515,6 @@ aclnnStatus aclnnFusedCausalConv1d(
       <td>-</td>
     </tr>
     <tr>
-      <td>y（aclTensor*）</td>
-      <td>输出</td>
-      <td>计算公式中的y，代表输出序列。</td>
-      <td>shape与x一致。</td>
-      <td>数据类型与x一致</td>
-      <td>ND</td>
-      <td>2-3</td>
-      <td>x</td>
-    </tr>
-    <tr>
       <td>workspaceSize（int64_t*）</td>
       <td>输出</td>
       <td>返回用户需要在Device侧申请的workspace大小。</td>
@@ -573,14 +558,14 @@ aclnnStatus aclnnFusedCausalConv1d(
     <tr>
       <td>ACLNN_ERR_PARAM_NULLPTR</td>
       <td>161001</td>
-      <td>传入的x、weight、convStates、y是空指针。</td>
+      <td>传入的x、weight、convStates是空指针。</td>
     </tr>
     <tr>
       <td>ACLNN_ERR_INNER_TILING_ERROR</td>
       <td>561002</td>
       <td>
       输入和输出的数据类型不在支持的范围内。<br>
-      x、weight、convStates、bias、y的数据类型不一致。<br>
+      x、weight、convStates、bias的数据类型不一致。<br>
       queryStartLoc、cacheIndices、initialStateMode、numAcceptedTokens、numComputedTokens、blockIdxFirstScheduledToken、blockIdxLastScheduledToken、initialStateIdx的数据类型不一致。<br>
       输入、输出Tensor的shape不在支持的范围内。<br>
       输入的属性不在支持的范围内。<br>
@@ -589,7 +574,7 @@ aclnnStatus aclnnFusedCausalConv1d(
     </tr>
   </tbody></table>
 
-## aclnnFusedCausalConv1d
+## aclnnInplaceFusedCausalConv1d
 
 - **参数说明：**
 
@@ -613,7 +598,7 @@ aclnnStatus aclnnFusedCausalConv1d(
     <tr>
       <td>workspaceSize</td>
       <td>输入</td>
-      <td>在Device侧申请的workspace大小，由第一段接口aclnnFusedCausalConv1dGetWorkspaceSize获取。</td>
+      <td>在Device侧申请的workspace大小，由第一段接口aclnnInplaceFusedCausalConv1dGetWorkspaceSize获取。</td>
     </tr>
     <tr>
       <td>executor</td>
@@ -635,7 +620,7 @@ aclnnStatus aclnnFusedCausalConv1d(
 ## 约束说明
 
 - 确定性计算：
-  - aclnnFusedCausalConv1d默认确定性实现。
+  - aclnnInplaceFusedCausalConv1d默认确定性实现。
 
 - 输入shape限制：
   - prefill场景：
@@ -689,7 +674,7 @@ aclnnStatus aclnnFusedCausalConv1d(
  */
 
 /*!
- * \file test_aclnn_fused_causal_conv1d.cpp
+ * \file test_aclnn_inplace_fused_causal_conv1d.cpp
  * \brief
  */
 
@@ -739,10 +724,8 @@ float Fp16ToFloat(uint16_t raw)
     uint32_t mant = raw & 0x3FF;
     float val;
     if (exp == 0) {
-        // subnormal or zero
         val = (sign ? -1.0f : 1.0f) * (static_cast<float>(mant) / 1024.0f) * (1.0f / 16384.0f);
     } else if (exp == 31) {
-        // infinity or NaN
         val = (mant == 0) ? (sign ? -HUGE_VALF : HUGE_VALF) : NAN;
     } else {
         val = (sign ? -1.0f : 1.0f) * (1.0f + static_cast<float>(mant) / 1024.0f) *
@@ -805,12 +788,12 @@ int main()
     std::vector<int64_t> initialStateModeShape = {batch};
     std::vector<int64_t> biasShape = {dim};
     std::vector<int64_t> numAcceptedTokensShape = {batch};
-    std::vector<int64_t> yShape = {cuSeqLen, dim};
 
     // ---- Host data ----
+    // x: fp16 1.0, shape [19, 128]
     std::vector<uint16_t> hostX(cuSeqLen * dim, 0x3C00); // fp16 1.0
 
-    // weight: pass-through at k=0, zero elsewhere — 用于简化 golden 验证
+    // weight: pass-through at k=0, zero elsewhere
     std::vector<uint16_t> hostWeight(K * dim, 0);
     for (int64_t d = 0; d < dim; d++) {
         hostWeight[0 * dim + d] = 0x3C00; // k=0: 1.0
@@ -834,21 +817,18 @@ int main()
     // num_accepted_tokens: 0 for prefill (no speculative decoding)
     std::vector<int32_t> hostNumAcceptedTokens(batch, 0);
 
-    // y output buffer
-    std::vector<uint16_t> hostY(cuSeqLen * dim, 0);
-
     // ---- Device pointers and aclTensors ----
     void *xDev = nullptr, *weightDev = nullptr, *convStatesDev = nullptr;
     void *queryStartLocDev = nullptr, *cacheIndicesDev = nullptr;
     void *initialStateModeDev = nullptr, *biasDev = nullptr;
-    void *numAcceptedTokensDev = nullptr, *yDev = nullptr;
+    void *numAcceptedTokensDev = nullptr;
 
     aclTensor *xTensor = nullptr, *weightTensor = nullptr, *convStatesTensor = nullptr;
     aclTensor *queryStartLocTensor = nullptr, *cacheIndicesTensor = nullptr;
     aclTensor *initialStateModeTensor = nullptr, *biasTensor = nullptr;
-    aclTensor *numAcceptedTokensTensor = nullptr, *yTensor = nullptr;
+    aclTensor *numAcceptedTokensTensor = nullptr;
 
-    // ---- Create required tensors ----
+    // ---- Create required tensors (x is non-const for inplace) ----
     ret = CreateAclTensor(hostX, xShape, &xDev, ACL_FLOAT16, &xTensor, ACL_FORMAT_ND);
     CHECK_RET(ret == ACL_SUCCESS, return ret);
 
@@ -878,9 +858,6 @@ int main()
                           &numAcceptedTokensTensor, ACL_FORMAT_ND);
     CHECK_RET(ret == ACL_SUCCESS, return ret);
 
-    ret = CreateAclTensor(hostY, yShape, &yDev, ACL_FLOAT16, &yTensor, ACL_FORMAT_ND);
-    CHECK_RET(ret == ACL_SUCCESS, return ret);
-
     int64_t activationMode = 0; // 0: None
     int64_t padSlotId = -1;     // -1: no pad-slot skipping
     int64_t runMode = 0;        // 0: prefill
@@ -892,16 +869,16 @@ int main()
     uint64_t workspaceSize = 0;
     aclOpExecutor *executor = nullptr;
 
-    ret = aclnnFusedCausalConv1dGetWorkspaceSize(xTensor, weightTensor, convStatesTensor, queryStartLocTensor,
-                                                 cacheIndicesTensor, initialStateModeTensor, biasTensor,
-                                                 numAcceptedTokensTensor,
-                                                 nullptr, // num_computed_tokens (non-APC: nullptr)
-                                                 nullptr, // block_idx_first_scheduled_token
-                                                 nullptr, // block_idx_last_scheduled_token
-                                                 nullptr, // initial_state_idx
-                                                 activationMode, padSlotId, runMode, maxQueryLen, residualConnection,
-                                                 blockSize, convMode, yTensor, &workspaceSize, &executor);
-    CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclnnFusedCausalConv1dGetWorkspaceSize failed. ERROR: %d\n", ret);
+    ret = aclnnInplaceFusedCausalConv1dGetWorkspaceSize(
+        xTensor, weightTensor, convStatesTensor, queryStartLocTensor, cacheIndicesTensor, initialStateModeTensor,
+        biasTensor, numAcceptedTokensTensor,
+        nullptr, // num_computed_tokens (non-APC: nullptr)
+        nullptr, // block_idx_first_scheduled_token
+        nullptr, // block_idx_last_scheduled_token
+        nullptr, // initial_state_idx
+        activationMode, padSlotId, runMode, maxQueryLen, residualConnection, blockSize, convMode, &workspaceSize,
+        &executor);
+    CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclnnInplaceFusedCausalConv1dGetWorkspaceSize failed. ERROR: %d\n", ret);
               return ret);
 
     void *workspaceAddr = nullptr;
@@ -910,17 +887,17 @@ int main()
         CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("allocate workspace failed. ERROR: %d\n", ret); return ret);
     }
 
-    ret = aclnnFusedCausalConv1d(workspaceAddr, workspaceSize, executor, stream);
-    CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclnnFusedCausalConv1d failed. ERROR: %d\n", ret); return ret);
+    ret = aclnnInplaceFusedCausalConv1d(workspaceAddr, workspaceSize, executor, stream);
+    CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclnnInplaceFusedCausalConv1d failed. ERROR: %d\n", ret); return ret);
 
     ret = aclrtSynchronizeStream(stream);
     CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclrtSynchronizeStream failed. ERROR: %d\n", ret); return ret);
 
-    auto ySize = GetShapeSize(yShape);
-    std::vector<uint16_t> yResult(ySize, 0);
-    ret = aclrtMemcpy(yResult.data(), ySize * sizeof(uint16_t), yDev, ySize * sizeof(uint16_t),
+    auto xSize = GetShapeSize(xShape);
+    std::vector<uint16_t> xResult(xSize, 0);
+    ret = aclrtMemcpy(xResult.data(), xSize * sizeof(uint16_t), xDev, xSize * sizeof(uint16_t),
                       ACL_MEMCPY_DEVICE_TO_HOST);
-    CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("copy y from device to host failed. ERROR: %d\n", ret); return ret);
+    CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("copy x from device to host failed. ERROR: %d\n", ret); return ret);
 
     auto csSize = GetShapeSize(convStatesShape);
     std::vector<uint16_t> csResult(csSize, 0);
@@ -929,9 +906,9 @@ int main()
     CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("copy convStates from device to host failed. ERROR: %d\n", ret);
               return ret);
 
-    LOG_PRINT("=== y output (first 10 elements) ===\n");
-    for (int64_t i = 0; i < 10 && i < ySize; i++) {
-        LOG_PRINT("  y[%lld] = %f\n", (long long)i, (double)Fp16ToFloat(yResult[i]));
+    LOG_PRINT("=== x output (inplace, first 10 elements) ===\n");
+    for (int64_t i = 0; i < 10 && i < xSize; i++) {
+        LOG_PRINT("  x[%lld] = %f\n", (long long)i, (double)Fp16ToFloat(xResult[i]));
     }
     LOG_PRINT("  ...\n");
 
@@ -939,7 +916,6 @@ int main()
     for (int64_t i = 0; i < 10 && i < csSize; i++) {
         LOG_PRINT("  convStates[%lld] = %f\n", (long long)i, (double)Fp16ToFloat(csResult[i]));
     }
-    LOG_PRINT("  ...\n");
 
     FreeTensorAndBuffer(xTensor, xDev);
     FreeTensorAndBuffer(weightTensor, weightDev);
@@ -949,7 +925,6 @@ int main()
     FreeTensorAndBuffer(initialStateModeTensor, initialStateModeDev);
     FreeTensorAndBuffer(biasTensor, biasDev);
     FreeTensorAndBuffer(numAcceptedTokensTensor, numAcceptedTokensDev);
-    FreeTensorAndBuffer(yTensor, yDev);
 
     if (workspaceSize > 0) {
         aclrtFree(workspaceAddr);

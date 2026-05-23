@@ -9,19 +9,19 @@
  */
 
 /*!
- * \file fused_causal_conv1d_proto.h
+ * \file inplace_fused_causal_conv1d_proto.h
  * \brief
  */
 
-#ifndef OPS_BUILT_IN_OP_PROTO_INC_FUSED_CAUSAL_CONV1D_H_
-#define OPS_BUILT_IN_OP_PROTO_INC_FUSED_CAUSAL_CONV1D_H_
+#ifndef OPS_BUILT_IN_OP_PROTO_INC_INPLACE_FUSED_CAUSAL_CONV1D_H_
+#define OPS_BUILT_IN_OP_PROTO_INC_INPLACE_FUSED_CAUSAL_CONV1D_H_
 
 #include "graph/operator_reg.h"
 
 namespace ge {
 
 /**
- * @brief Function FusedCausalConv1d.
+ * @brief Function InplaceFusedCausalConv1d.
  *
  * @par Inputs:
  * @li x: Input sequence tensor. shape [cu_seq_len, dim] or [batch, seqlen, dim]. Supports float16, bfloat16.
@@ -53,9 +53,9 @@ namespace ge {
  *
  * @par Outputs:
  * @li conv_states: Updated cache state tensor. Same shape and type as input conv_states.
- * @li y: Output sequence tensor. Same shape and type as x.
+ * @li x: Updated x tensor.
  */
-REG_OP(FusedCausalConv1d)
+REG_OP(InplaceFusedCausalConv1d)
     .INPUT(x, TensorType({DT_BF16, DT_FLOAT16}))
     .INPUT(weight, TensorType({DT_BF16, DT_FLOAT16}))
     .INPUT(conv_states, TensorType({DT_BF16, DT_FLOAT16}))
@@ -76,9 +76,9 @@ REG_OP(FusedCausalConv1d)
     .ATTR(block_size, Int, 128)
     .ATTR(conv_mode, Int, 0)
     .OUTPUT(conv_states, TensorType({DT_BF16, DT_FLOAT16}))
-    .OUTPUT(y, TensorType({DT_BF16, DT_FLOAT16}))
-    .OP_END_FACTORY_REG(FusedCausalConv1d)
+    .OUTPUT(x, TensorType({DT_BF16, DT_FLOAT16}))
+    .OP_END_FACTORY_REG(InplaceFusedCausalConv1d)
 
 } // namespace ge
 
-#endif // OPS_BUILT_IN_OP_PROTO_INC_FUSED_CAUSAL_CONV1D_H_
+#endif // OPS_BUILT_IN_OP_PROTO_INC_INPLACE_FUSED_CAUSAL_CONV1D_H_
