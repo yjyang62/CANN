@@ -9,22 +9,24 @@
 # -----------------------------------------------------------------------------------------------------------
 add_op_to_compiled_list()
 if (BUILD_OPEN_PROJECT)
+    set(inplace_fused_causal_conv1d_depends attention/fused_causal_conv1d CACHE INTERNAL "Dependencies for inplace_fused_causal_conv1d")
+    set(inplace_fused_causal_conv1d_apt_depends attention/fused_causal_conv1d CACHE INTERNAL "Dependencies for inplace_fused_causal_conv1d")
     target_sources(op_host_aclnnExc PRIVATE
-    fused_causal_conv1d_def.cpp
+    inplace_fused_causal_conv1d_def.cpp
     )
     if("${ASCEND_COMPUTE_UNIT}" STREQUAL "ascend950")
         add_ops_compile_options(
-            OP_NAME FusedCausalConv1d
+            OP_NAME InplaceFusedCausalConv1d
             COMPUTE_UNIT Ascend950PR_9599
             OPTIONS --cce-auto-sync=off
-                    -mllvm 
+                    -mllvm
                     -cce-aicore-dcci-before-kernel-end=false
                     -Wno-deprecated-declarations
                     -Werror
         )
     else()
         add_ops_compile_options(
-            OP_NAME FusedCausalConv1d
+            OP_NAME InplaceFusedCausalConv1d
             OPTIONS --cce-auto-sync=off
                     -Wno-deprecated-declarations
                     -Werror
@@ -38,7 +40,7 @@ if(NOT BUILD_OPS_RTY_KERNEL)
         OP_API_INDEPENDENT ON
         # op_api新的地址
         OP_API_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../op_api
-        OPTYPE fused_causal_conv1d 
+        OPTYPE inplace_fused_causal_conv1d 
         ACLNNTYPE aclnn_exclude
     )
 endif()

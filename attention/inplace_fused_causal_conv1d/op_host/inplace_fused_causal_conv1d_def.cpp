@@ -1,24 +1,24 @@
 /**
- * Copyright (c) 2026 Huawei Technologies Co., Ltd.
- * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
- * CANN Open Software License Agreement Version 2.0 (the "License").
- * Please refer to the License for details. You may not use this file except in compliance with the License.
- * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
- * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
- * See LICENSE in the root of the software repository for the full text of the License.
- */
+ * Copyright (c) 2026 Huawei Technologies Co., Ltd.
+ * This program is free software, you can redistribute it and/or modify it under the terms and conditions of
+ * CANN Open Software License Agreement Version 2.0 (the "License").
+ * Please refer to the License for details. You may not use this file except in compliance with the License.
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+ * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+ * See LICENSE in the root of the software repository for the full text of the License.
+ */
 
 /*!
- * \file fused_causal_conv1d_def.cpp
- * \brief FusedCausalConv1d ascendc impl
+ * \file inplace_fused_causal_conv1d_def.cpp
+ * \brief InplaceFusedCausalConv1d ascendc impl
  */
 
 #include "register/op_def_registry.h"
 
 namespace ops {
-class FusedCausalConv1d : public OpDef {
+class InplaceFusedCausalConv1d : public OpDef {
 public:
-    explicit FusedCausalConv1d(const char* name) : OpDef(name)
+    explicit InplaceFusedCausalConv1d(const char* name) : OpDef(name)
     {
         this->Input("x")
             .ParamType(REQUIRED)
@@ -72,7 +72,7 @@ public:
             .ParamType(REQUIRED)
             .DataType({ge::DT_FLOAT16, ge::DT_BF16})
             .FormatList({ge::FORMAT_ND});
-        this->Output("y")
+        this->Output("x")
             .ParamType(REQUIRED)
             .DataType({ge::DT_FLOAT16, ge::DT_BF16})
             .FormatList({ge::FORMAT_ND});
@@ -90,10 +90,10 @@ public:
 			.DynamicShapeSupportFlag(true)
 			.NeedCheckSupportFlag(false)
 			.PrecisionReduceFlag(true)
-            .ExtendCfgInfo("opFile.value", "fused_causal_conv1d_apt");
+            .ExtendCfgInfo("opFile.value", "inplace_fused_causal_conv1d_apt");
         this->AICore().AddConfig("ascend950", config_950);
     }
 };
 
-OP_ADD(FusedCausalConv1d);
+OP_ADD(InplaceFusedCausalConv1d);
 } // namespace ops
