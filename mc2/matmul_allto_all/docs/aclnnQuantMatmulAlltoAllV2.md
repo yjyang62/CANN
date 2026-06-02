@@ -1,4 +1,6 @@
-# aclnnQuantMatmulAlltoAll
+# aclnnQuantMatmulAlltoAllV2
+
+[📄 查看源码](https://gitcode.com/cann/ops-transformer/tree/master/mc2/matmul_allto_all)
 
 ## 产品支持情况
 
@@ -14,6 +16,7 @@
 ## 功能说明
 
 - 接口功能：完成量化的Matmul计算、Permute（保证通信后地址连续）和AlltoAll通信的融合，**先计算后通信**，支持K-C量化、mx[量化模式](../../../docs/zh/context/量化介绍.md)。
+
 - 计算公式：假设x1的shape为(BS, H1)，x2的shape为(H1, H2)，rankSize为NPU卡数。
 
   - <term>Atlas A2 训练系列产品/Atlas A2 推理系列产品</term>：
@@ -44,12 +47,18 @@
       output = AlltoAll(permutedOut).view(rankSize * BS, H2 / rankSize)
       $$
 
+相较于`aclnnQuantMatmulAlltoAll`接口，该接口变更如下：
+
+- 新增`commMode`参数，用户根据该参数指定芯片使用的通信引擎。
+
+  - <term>Ascend 950PR/Ascend 950DT</term>：支持空字符串`""`、`ai\_cpu`和`ccu`。指定空字符串时，根据卡数调用通信引擎：卡数小于等于8时调用CCU引擎，否则调用AI\_CPU引擎。
+
 ## 函数原型
 
-每个算子分为[两段式接口](../../../docs/zh/context/两段式接口.md)，必须先调用 “aclnnQuantMatmulAlltoAllGetWorkspaceSize”接口获取计算所需workspace大小以及包含了算子计算流程的执行器，再调用“aclnnQuantMatmulAlltoAll”接口执行计算。
+每个算子分为[两段式接口](../../../docs/zh/context/两段式接口.md)，必须先调用 “aclnnQuantMatmulAlltoAllV2GetWorkspaceSize”接口获取计算所需workspace大小以及包含了算子计算流程的执行器，再调用“aclnnQuantMatmulAlltoAllV2”接口执行计算。
 
 ```cpp
-aclnnStatus aclnnQuantMatmulAlltoAllGetWorkspaceSize(
+aclnnStatus aclnnQuantMatmulAlltoAllV2GetWorkspaceSize(
 const aclTensor*   x1,
 const aclTensor*   x2,
 const aclTensor*   biasOptional,
@@ -60,6 +69,7 @@ const aclTensor*   x1OffsetOptional,
 const aclTensor*   x2OffsetOptional,
 const aclIntArray* alltoAllAxesOptional,
 const char*        group,
+const char*        commMode,
 int64_t            x1QuantMode,
 int64_t            x2QuantMode,
 int64_t            commQuantMode,
@@ -73,14 +83,14 @@ aclOpExecutor**    executor);
 ```
 
 ```cpp
-aclnnStatus aclnnQuantMatmulAlltoAll(
+aclnnStatus aclnnQuantMatmulAlltoAllV2(
   void*          workspace,
   uint64_t       workspaceSize,
   aclOpExecutor* executor,
   aclrtStream    stream)
 ```
 
-## aclnnQuantMatmulAlltoAllGetWorkspaceSize
+## aclnnQuantMatmulAlltoAllV2GetWorkspaceSize
 
 - ​**参数说明**​：
 
@@ -201,6 +211,16 @@ aclnnStatus aclnnQuantMatmulAlltoAll(
     <td>输入</td>
     <td>标识列组的字符串，即通信域名称，通过Hccl接口HcclGetCommName获取commName作为该参数。</td>
     <td>字符串长度要求(0, 128)。</td>
+    <td>STRING</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    </tr>
+    <tr>
+    <td>commMode</td>
+    <td>输入</td>
+    <td>指定当前通信类型。</td>
+    <td>支持输入空字符串""、"ai\_cpu"或"ccu"。</td>
     <td>STRING</td>
     <td>-</td>
     <td>-</td>
@@ -368,7 +388,7 @@ aclnnStatus aclnnQuantMatmulAlltoAll(
       </tbody>
   </table>
 
-## aclnnQuantMatmulAlltoAll
+## aclnnQuantMatmulAlltoAllV2
 
 * **参数说明：**
 
@@ -392,7 +412,7 @@ aclnnStatus aclnnQuantMatmulAlltoAll(
     <tr>
         <td>workspaceSize</td>
         <td>输入</td>
-        <td>在Device侧申请的workspace大小，由第一段接口aclnnQuantMatmulAlltoAllGetWorkspaceSize获取。</td>
+        <td>在Device侧申请的workspace大小，由第一段接口aclnnQuantMatmulAlltoAllV2GetWorkspaceSize获取。</td>
     </tr>
     <tr>
         <td>executor</td>
@@ -513,7 +533,7 @@ aclnnStatus aclnnQuantMatmulAlltoAll(
 * 不支持跨超节点通信，只支持超节点内。
 * 通信引擎约束：
    - <term>Atlas A2 训练系列产品/Atlas A2 推理系列产品</term>：支持MTE通信。
-   - <term>Ascend 950PR/Ascend 950DT</term>：支持CCU通信。由于CCU通信域存在限制，可能出现HCCL集合通信库自动降级使用AI\_CPU通信引擎从而导致报错的场景，如出现此种报错请使用aclnnMatmulAlltoAllV2接口，并指定commMode参数为ai\_cpu。
+   - <term>Ascend 950PR/Ascend 950DT</term>：支持CCU通信和支持AI\_CPU通信。
 
 ## 调用示例
 
@@ -532,7 +552,7 @@ aclnnStatus aclnnQuantMatmulAlltoAll(
     #include <acl/acl.h>
     #include <hccl/hccl.h>
     #include "aclnn/opdev/fp16_t.h"
-    #include "aclnnop/aclnn_quant_matmul_allto_all.h"
+    #include "aclnnop/aclnn_quant_matmul_allto_all_v2.h"
 
     int ndev = 2;
 
@@ -584,7 +604,7 @@ aclnnStatus aclnnQuantMatmulAlltoAll(
         aclrtContext context;
     };
 
-    int launchOneThreadQuantMatmulAlltoAll(Args &args) {
+    int launchOneThreadQuantMatmulAlltoAllV2(Args &args) {
         int ret;
         ret = aclrtSetCurrentContext(args.context);
         CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclrtSetCurrentContext failed. ERROR: %d\n", ret); return ret);
@@ -651,24 +671,24 @@ aclnnStatus aclnnQuantMatmulAlltoAll(
         ret = CreateAclTensor(outHostData, outShape, &outDeviceAddr, aclDataType::ACL_FLOAT16, &out);
         CHECK_RET(ret == ACL_SUCCESS, return ret);
         // 调用第一段接口
-        ret = aclnnQuantMatmulAlltoAllGetWorkspaceSize(x1, x2, bias, x1Scale, x2Scale, nullptr, nullptr, nullptr,
-                                                      alltoAllAxesOptional, hcom_name, x1QuantMode, x2QuantMode, 
+        ret = aclnnQuantMatmulAlltoAllV2GetWorkspaceSize(x1, x2, bias, x1Scale, x2Scale, nullptr, nullptr, nullptr,
+                                                      alltoAllAxesOptional, hcom_name, "default", x1QuantMode, x2QuantMode, 
                                                       commQuantMode, commQuantDtype, groupSize, false, false,
                                                       out, &workspaceSize, &executor);
         CHECK_RET(ret == ACL_SUCCESS,
-                LOG_PRINT("aclnnQuantMatmulAlltoAllGetWorkspaceSize failed. ERROR: %d\n", ret); return ret);
+                LOG_PRINT("aclnnQuantMatmulAlltoAllV2GetWorkspaceSize failed. ERROR: %d\n", ret); return ret);
         // 根据第一段接口计算出的workspaceSize申请device内存
         if (workspaceSize > 0) {
             ret = aclrtMalloc(&workspaceAddr, workspaceSize, ACL_MEM_MALLOC_HUGE_FIRST);
             CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("allocate workspace failed. ERROR: %d\n", ret); return ret);
         }
         // 调用第二段接口
-        ret = aclnnQuantMatmulAlltoAll(workspaceAddr, workspaceSize, executor, args.stream);
-        CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclnnQuantMatmulAlltoAll failed. ERROR: %d\n", ret); return ret);
+        ret = aclnnQuantMatmulAlltoAllV2(workspaceAddr, workspaceSize, executor, args.stream);
+        CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclnnQuantMatmulAlltoAllV2 failed. ERROR: %d\n", ret); return ret);
         //（固定写法）同步等待任务执行结束
         ret = aclrtSynchronizeStreamWithTimeout(args.stream, 10000);
         CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclrtSynchronizeStream failed. ERROR: %d\n", ret); return ret);
-        LOG_PRINT("device%d aclnnQuantMatmulAlltoAll execute success \n", args.rankId);
+        LOG_PRINT("device%d aclnnQuantMatmulAlltoAllV2 execute success \n", args.rankId);
         // 释放device资源，需要根据具体API的接口定义修改
         if (x1 != nullptr) {
             aclDestroyTensor(x1);
@@ -745,7 +765,7 @@ aclnnStatus aclnnQuantMatmulAlltoAll(
             args[rankId].hcclComm = comms[rankId];
             args[rankId].stream = stream[rankId];
             args[rankId].context = context[rankId];
-            threads[rankId].reset(new(std::nothrow) std::thread(&launchOneThreadQuantMatmulAlltoAll, std::ref(args[rankId])));
+            threads[rankId].reset(new(std::nothrow) std::thread(&launchOneThreadQuantMatmulAlltoAllV2, std::ref(args[rankId])));
         }
         for (uint32_t rankId = 0; rankId < ndev; rankId++) {
             threads[rankId]->join();
@@ -765,7 +785,7 @@ aclnnStatus aclnnQuantMatmulAlltoAll(
     #include <vector>
     #include <acl/acl.h>
     #include <hccl/hccl.h>
-    #include "aclnnop/aclnn_quant_matmul_allto_all.h"
+    #include "aclnnop/aclnn_quant_matmul_allto_all_v2.h"
   
     int ndev = 2;
   
@@ -817,7 +837,7 @@ aclnnStatus aclnnQuantMatmulAlltoAll(
         aclrtContext context;
     };
   
-    int launchOneThreadQuantMatmulAlltoAll(Args &args) {
+    int launchOneThreadQuantMatmulAlltoAllV2(Args &args) {
         int ret;
         ret = aclrtSetCurrentContext(args.context);
         CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclrtSetCurrentContext failed. ERROR: %d\n", ret); return ret);
@@ -884,24 +904,24 @@ aclnnStatus aclnnQuantMatmulAlltoAll(
         ret = CreateAclTensor(outHostData, outShape, &outDeviceAddr, aclDataType::ACL_FLOAT16, &out);
         CHECK_RET(ret == ACL_SUCCESS, return ret);
         // 调用第一段接口
-        ret = aclnnQuantMatmulAlltoAllGetWorkspaceSize(x1, x2, bias, x1Scale, x2Scale, nullptr, nullptr, nullptr,
-                                                       alltoAllAxesOptional, hcom_name, x1QuantMode, x2QuantMode, 
+        ret = aclnnQuantMatmulAlltoAllV2GetWorkspaceSize(x1, x2, bias, x1Scale, x2Scale, nullptr, nullptr, nullptr,
+                                                       alltoAllAxesOptional, hcom_name, "default", x1QuantMode, x2QuantMode, 
                                                        commQuantMode, commQuantDtype, groupSize, false, false,
                                                        out, &workspaceSize, &executor);
         CHECK_RET(ret == ACL_SUCCESS,
-                LOG_PRINT("aclnnQuantMatmulAlltoAllGetWorkspaceSize failed. ERROR: %d\n", ret); return ret);
+                LOG_PRINT("aclnnQuantMatmulAlltoAllV2GetWorkspaceSize failed. ERROR: %d\n", ret); return ret);
         // 根据第一段接口计算出的workspaceSize申请device内存
         if (workspaceSize > 0) {
             ret = aclrtMalloc(&workspaceAddr, workspaceSize, ACL_MEM_MALLOC_HUGE_FIRST);
             CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("allocate workspace failed. ERROR: %d\n", ret); return ret);
         }
         // 调用第二段接口
-        ret = aclnnQuantMatmulAlltoAll(workspaceAddr, workspaceSize, executor, args.stream);
-        CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclnnQuantMatmulAlltoAll failed. ERROR: %d\n", ret); return ret);
+        ret = aclnnQuantMatmulAlltoAllV2(workspaceAddr, workspaceSize, executor, args.stream);
+        CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclnnQuantMatmulAlltoAllV2 failed. ERROR: %d\n", ret); return ret);
         //（固定写法）同步等待任务执行结束
         ret = aclrtSynchronizeStreamWithTimeout(args.stream, 10000);
         CHECK_RET(ret == ACL_SUCCESS, LOG_PRINT("aclrtSynchronizeStream failed. ERROR: %d\n", ret); return ret);
-        LOG_PRINT("device%d aclnnQuantMatmulAlltoAll execute success \n", args.rankId);
+        LOG_PRINT("device%d aclnnQuantMatmulAlltoAllV2 execute success \n", args.rankId);
         // 释放device资源，需要根据具体API的接口定义修改
         if (x1 != nullptr) {
             aclDestroyTensor(x1);
@@ -978,7 +998,7 @@ aclnnStatus aclnnQuantMatmulAlltoAll(
             args[rankId].hcclComm = comms[rankId];
             args[rankId].stream = stream[rankId];
             args[rankId].context = context[rankId];
-            threads[rankId].reset(new(std::nothrow) std::thread(&launchOneThreadQuantMatmulAlltoAll, std::ref(args[rankId])));
+            threads[rankId].reset(new(std::nothrow) std::thread(&launchOneThreadQuantMatmulAlltoAllV2, std::ref(args[rankId])));
         }
         for (uint32_t rankId = 0; rankId < ndev; rankId++) {
             threads[rankId]->join();
