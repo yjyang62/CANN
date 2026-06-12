@@ -5,23 +5,23 @@
  * Please refer to the License for details. You may not use this file except in compliance with the License.
  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
- * See LICENSE in the root of the software repository for the full text of the License.
- */
+ * See LICENSE in the root of the software repository for the full text of the License. */
 
 /*!
  * \file quant_matmul_dequant_grouped.h
  * \brief
  */
-#ifndef _ASCENDC_QUANT_MATMUL_DEQUANT_GROUPED_H_
-#define _ASCENDC_QUANT_MATMUL_DEQUANT_GROUPED_H_
+#ifndef _ASCENDC_QUANT_MATMUL_DEQUANT_GROUPED_STAGED_H_
+#define _ASCENDC_QUANT_MATMUL_DEQUANT_GROUPED_STAGED_H_
 
 #include <cmath>
 #include "kernel_operator.h"
 #include "lib/matmul_intf.h"
-#include "quant_grouped_matmul_dequant_normal.h"
+#include "quant_grouped_matmul_dequant_staged_normal.h"
 using namespace AscendC;
 
 namespace AscendC {
+namespace qgmmd_staged {
 constexpr uint32_t SPECIAL_INIT_VAL_GMM = 123456;
 constexpr uint32_t MYSYNCALL_SWIFT_THRES = 16;
 constexpr uint32_t TILING2_THRESHOLD = 96;
@@ -115,7 +115,7 @@ public:
 
     __aicore__ inline void Init(GM_ADDR x, GM_ADDR quantized_weight, GM_ADDR weight_scale, GM_ADDR group_list,
                                 GM_ADDR bias, GM_ADDR x_scale, GM_ADDR x_offset, GM_ADDR smooth_scale, GM_ADDR y,
-                                GM_ADDR usrWorkspace, const QuantMatmulDequantTilingData *__restrict qmmTiling)
+                                GM_ADDR usrWorkspace, const QuantGroupedMatmulDequantTilingData *__restrict qmmTiling)
     {
         // block_id
         block_id = GetBlockIdx();
@@ -489,5 +489,6 @@ protected:
     uint32_t fracM_;
     uint32_t gemv_threshold;
 };
+} // namespace qgmmd_staged
 } // namespace AscendC
 #endif

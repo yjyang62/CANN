@@ -5,21 +5,22 @@
  * Please refer to the License for details. You may not use this file except in compliance with the License.
  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
- * See LICENSE in the root of the software repository for the full text of the License.
- */
+ * See LICENSE in the root of the software repository for the full text of the License. */
 
 /*!
  * \file quant_grouped_matmul_dequant_base.h
  * \brief
  */
-#ifndef _ASCENDC_QUANT_GROUPED_MATMUL_DEQUANT_BASE_H_
-#define _ASCENDC_QUANT_GROUPED_MATMUL_DEQUANT_BASE_H_
+#ifndef _ASCENDC_QUANT_GROUPED_MATMUL_DEQUANT_BASE_STAGED_H_
+#define _ASCENDC_QUANT_GROUPED_MATMUL_DEQUANT_BASE_STAGED_H_
 
 #include "kernel_operator.h"
 #include "lib/matmul_intf.h"
+#include "quant_grouped_matmul_dequant_staged_tiling.h"
 using namespace AscendC;
 
 namespace AscendC {
+namespace qgmmd_staged {
 constexpr uint32_t UB_SIZE = 256 * 1024;
 constexpr uint32_t L1_SIZE = 1024 * 1024;
 constexpr uint32_t L0A_SIZE = 64 * 1024;
@@ -339,7 +340,7 @@ protected:
     LocalTensor<half> dynamicScale[NUMBER_2];
     LocalTensor<float> dynamicScaleFloat[NUMBER_2];
 
-    const QuantMatmulDequantTilingData *__restrict tilingData;
+    const QuantGroupedMatmulDequantTilingData *__restrict tilingData;
 
     event_t eventIdMTE3ToV[NUMBER_2];
     event_t eventIdMTE2ToV[1];
@@ -369,5 +370,6 @@ protected:
 
     uint32_t curValue_ = 0;
 };
+} // namespace qgmmd_staged
 } // namespace AscendC
 #endif

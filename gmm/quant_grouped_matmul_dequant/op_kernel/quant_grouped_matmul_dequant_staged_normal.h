@@ -5,22 +5,22 @@
  * Please refer to the License for details. You may not use this file except in compliance with the License.
  * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED,
  * INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
- * See LICENSE in the root of the software repository for the full text of the License.
- */
+ * See LICENSE in the root of the software repository for the full text of the License. */
 
 /*!
  * \file quant_grouped_matmul_dequant_normal.h
  * \brief
  */
-#ifndef _ASCENDC_QUANT_GROUPED_MATMUL_DEQUANT_NORMAL_H_
-#define _ASCENDC_QUANT_GROUPED_MATMUL_DEQUANT_NORMAL_H_
+#ifndef _ASCENDC_QUANT_GROUPED_MATMUL_DEQUANT_NORMAL_STAGED_H_
+#define _ASCENDC_QUANT_GROUPED_MATMUL_DEQUANT_NORMAL_STAGED_H_
 
 #include "kernel_operator.h"
 #include "lib/matmul_intf.h"
-#include "quant_grouped_matmul_dequant_gemv.h"
+#include "quant_grouped_matmul_dequant_staged_gemv.h"
 using namespace AscendC;
 
 namespace AscendC {
+namespace qgmmd_staged {
 class QuantMatmulDequantNormal : public QuantMatmulDequantGemv {
 public:
     __aicore__ inline QuantMatmulDequantNormal()
@@ -43,7 +43,7 @@ public:
 
     __aicore__ inline void Init(GM_ADDR x, GM_ADDR quantized_weight, GM_ADDR weight_scale, GM_ADDR bias,
                                 GM_ADDR x_scale, GM_ADDR x_offset, GM_ADDR smooth_scale, GM_ADDR y,
-                                GM_ADDR usrWorkspace, const QuantMatmulDequantTilingData *__restrict qmmTiling)
+                                GM_ADDR usrWorkspace, const QuantGroupedMatmulDequantTilingData *__restrict qmmTiling)
     {
         // block_id
         block_id = GetBlockIdx();
@@ -727,5 +727,6 @@ protected:
     LocalTensor<int8_t> l0aX_DB[NUMBER_2];
     LocalTensor<int8_t> l0bW_DB[NUMBER_2];
 };
+} // namespace qgmmd_staged
 } // namespace AscendC
 #endif
