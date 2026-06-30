@@ -9,22 +9,20 @@
  */
 
 /* !
- * \file mhc_pre_sinkhorn_backward_tiling.h
+ * \file mhc_pre_sinkhorn_backward_arch22_tiling.h
  * \brief
  */
 
-#ifndef MHC_PRE_SINKHORN_BACKWARD_TILING_H_
-#define MHC_PRE_SINKHORN_BACKWARD_TILING_H_
+#ifndef MHC_PRE_SINKHORN_BACKWARD_ARCH22_TILING_H_
+#define MHC_PRE_SINKHORN_BACKWARD_ARCH22_TILING_H_
 
-#include <cstdint>
-#include <register/tilingdata_base.h>
-#include <tiling/tiling_api.h>
+#include "op_host/tiling_base.h"
+#include "register/tilingdata_base.h"
+#include "tiling/tiling_api.h"
+#include "err/ops_err.h"
 
 namespace optiling {
-struct MhcPreSinkhornBackwardCompileInfo {
-    uint32_t aicNum;
-    uint32_t aivNum;
-};
-} // namespace optiling
+ge::graphStatus TilingMhcPreSinkhornBackwardArch22(gert::TilingContext* context);
+}
 
-#endif // MHC_PRE_SINKHORN_BACKWARD_TILING_H_
+#endif // MHC_PRE_SINKHORN_BACKWARD_ARCH22_TILING_H_
