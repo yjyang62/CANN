@@ -110,6 +110,10 @@ env_variables: dict[str, Callable[[], Any]] = {
     # Control the aclrtMemcpyBatchAsync compile path for KV cache offloading.
     # "1": force enable, "0": force disable, None: auto-detect from CANN headers.
     "VLLM_ASCEND_ENABLE_BATCH_MEMCPY": lambda: os.getenv("VLLM_ASCEND_ENABLE_BATCH_MEMCPY", None),
+    # Whether to run DeepSeek-V4 sparse MLA on Ascend A5 with BF16 KV cache.
+    # 0 (default): keep the existing FP8 KV cache path.
+    # 1: keep DSV4 ori/cmp KV caches in BF16 and use sparse_flash_mla.
+    "VLLM_ASCEND_DSV4_KV_BF16": lambda: bool(int(os.getenv("VLLM_ASCEND_DSV4_KV_BF16", "0"))),
 }
 
 # end-env-vars-definition

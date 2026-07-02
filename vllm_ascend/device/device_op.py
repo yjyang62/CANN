@@ -31,7 +31,7 @@ from vllm_ascend.ops.triton.fla.chunk_scaled_dot_kkt import chunk_scaled_dot_kkt
 from vllm_ascend.ops.triton.fla.solve_tril import solve_tril_16x16_kernel
 from vllm_ascend.ops.triton.fused_gdn_gating import fused_gdn_gating_patch
 from vllm_ascend.quantization.quant_type import QuantType
-from vllm_ascend.utils import AscendDeviceType, get_ascend_device_type
+from vllm_ascend.utils import AscendDeviceType, dsv4_use_kv_bf16, get_ascend_device_type
 
 DSA_COMPRESSOR_SLOT_MAPPING_FLAT = 1
 DSA_COMPRESSOR_SLOT_MAPPING_BLOCK_OFFSET = 2
@@ -524,6 +524,16 @@ class BaseDeviceAdaptor:
         return {}
 
     @staticmethod
+    def get_dsa_kv_layout():
+        """Returns the layout string for ori_kv/cmp_kv passed to sparse attention."""
+        return "PA_ND"
+
+    @staticmethod
+    def get_dsa_swa_only_cmp_ratio():
+        """cmp_ratio for the SWA-only DSV4 path."""
+        return 1
+
+    @staticmethod
     def get_dsa_compressor_slot_mapping_format():
         """Slot mapping side output format consumed by the DSA scatter op."""
         return DSA_COMPRESSOR_SLOT_MAPPING_BLOCK_OFFSET
@@ -794,6 +804,79 @@ class BaseDeviceAdaptor:
         return torch_npu.npu_moe_token_unpermute(
             permuted_tokens=permuted_tokens, sorted_indices=torch.abs(sorted_indices), probs=probs
         )
+
+
+def _get_bf16_sparse_flash_mla_ops():
+    ascend_ops = getattr(torch.ops, "_C_ascend", None)
+    if ascend_ops is not None and hasattr(ascend_ops, "npu_sparse_flash_mla"):
+        return ascend_ops.npu_sparse_flash_mla_metadata, ascend_ops.npu_sparse_flash_mla, True
+
+    try:
+        import cann_ops_transformer  # noqa: F401
+    except ImportError:
+        pass
+
+    cann_ops = getattr(torch.ops, "cann_ops_transformer", None)
+    if cann_ops is not None and hasattr(cann_ops, "sparse_flash_mla"):
+        return cann_ops.sparse_flash_mla_metadata, cann_ops.sparse_flash_mla, False
+
+    raise RuntimeError(
+        "DSV4 BF16 KV on A5 requires sparse_flash_mla and sparse_flash_mla_metadata. "
+        "Install cann_ops_transformer with --ops=sparse_flash_mla,sparse_flash_mla_metadata."
+    )
+
+
+def _bf16_add_cmp_kv_lengths(kwargs: dict[str, Any]) -> None:
+    cmp_ratio = kwargs.get("cmp_ratio") or 0
+    seqused_ori = kwargs.get("seqused_ori_kv")
+    if cmp_ratio <= 1 or seqused_ori is None:
+        return
+    if kwargs.get("seqused_cmp_kv") is None:
+        kwargs["seqused_cmp_kv"] = seqused_ori // cmp_ratio
+    if kwargs.get("cmp_residual_kv") is None:
+        kwargs["cmp_residual_kv"] = seqused_ori % cmp_ratio
+
+
+def _maybe_tensor_scalar_to_int(value):
+    if isinstance(value, torch.Tensor):
+        return int(value.item())
+    return value
+
+
+def _bf16_sparse_flash_mla_metadata(**kwargs):
+    if "seqused_kv" in kwargs:
+        kwargs["seqused_ori_kv"] = kwargs.pop("seqused_kv")
+    if "max_seqlen_kv" in kwargs:
+        kwargs["max_seqlen_ori_kv"] = kwargs.pop("max_seqlen_kv")
+    _bf16_add_cmp_kv_lengths(kwargs)
+    if kwargs.get("seqused_cmp_kv") is not None and kwargs.get("max_seqlen_cmp_kv") is None:
+        kwargs["max_seqlen_cmp_kv"] = kwargs["seqused_cmp_kv"].max()
+    for key in ("max_seqlen_q", "max_seqlen_ori_kv", "max_seqlen_cmp_kv"):
+        if key in kwargs:
+            kwargs[key] = _maybe_tensor_scalar_to_int(kwargs[key])
+
+    metadata_op, _, accepts_device_kwarg = _get_bf16_sparse_flash_mla_ops()
+    if not accepts_device_kwarg:
+        kwargs.pop("device", None)
+    return metadata_op(**kwargs)
+
+
+def _bf16_sparse_flash_mla(*args, **kwargs):
+    if "seqused_kv" in kwargs:
+        kwargs["seqused_ori_kv"] = kwargs.pop("seqused_kv")
+    _bf16_add_cmp_kv_lengths(kwargs)
+
+    _, attn_op, _ = _get_bf16_sparse_flash_mla_ops()
+    return attn_op(*args, **kwargs)
+
+
+def _bf16_scatter_kv_cache(cache: torch.Tensor, x: torch.Tensor, slot_mapping: torch.Tensor) -> None:
+    if slot_mapping.dim() != 2 or slot_mapping.shape[-1] != 2:
+        raise ValueError(f"BF16 DSA slot_mapping must have shape [num_tokens, 2], got {tuple(slot_mapping.shape)}.")
+    block_indices = slot_mapping[:, 0].to(torch.int64).clamp(min=0)
+    block_offsets = slot_mapping[:, 1].to(torch.int64).clamp(min=0)
+    update_shape = (slot_mapping.shape[0],) + tuple(cache.shape[2:])
+    cache[block_indices, block_offsets] = x.reshape(update_shape)
 
 
 class A5DeviceAdaptor(BaseDeviceAdaptor):
@@ -1155,23 +1238,43 @@ class A5DeviceAdaptor(BaseDeviceAdaptor):
 
     @staticmethod
     def get_dsa_sparse_attn_metadata_op():
+        if dsv4_use_kv_bf16():
+            return _bf16_sparse_flash_mla_metadata
         return torch.ops._C_ascend.npu_kv_quant_sparse_attn_sharedkv_metadata
 
     @staticmethod
     def get_dsa_sparse_attn_metadata_kwargs(device):
+        if dsv4_use_kv_bf16():
+            return {"device": str(device)}
         return {"kv_quant_mode": 1}
 
     @staticmethod
     def get_dsa_sparse_attn_op():
+        if dsv4_use_kv_bf16():
+            return _bf16_sparse_flash_mla
         return torch.ops._C_ascend.npu_kv_quant_sparse_attn_sharedkv
 
     @staticmethod
     def get_dsa_sparse_attn_base_kwargs():
+        if dsv4_use_kv_bf16():
+            return {}
         return {"kv_quant_mode": 1, "tile_size": 64, "rope_head_dim": 64}
+
+    @staticmethod
+    def get_dsa_kv_layout():
+        if dsv4_use_kv_bf16():
+            return "PA_BBND"
+        return "PA_ND"
+
+    @staticmethod
+    def get_dsa_swa_only_cmp_ratio():
+        return 1
 
     @staticmethod
     def get_dsa_compressor_slot_mapping_format():
         """A5 kv_compress_epilog consumes flat slot ids."""
+        if dsv4_use_kv_bf16():
+            return DSA_COMPRESSOR_SLOT_MAPPING_BLOCK_OFFSET
         return DSA_COMPRESSOR_SLOT_MAPPING_FLAT
 
     # ===== SWA / Compressor KV Scatter =====
@@ -1181,6 +1284,9 @@ class A5DeviceAdaptor(BaseDeviceAdaptor):
         """Scatter KV into cache with fused quantization+compression.
         A5: kv_compress_epilog handles quant/compress/scatter internally.
         Input x is unquantized bf16; cache shape is [..., head_dim]."""
+        if dsv4_use_kv_bf16():
+            _bf16_scatter_kv_cache(cache, x, slot_mapping)
+            return
         torch.ops._C_ascend.kv_compress_epilog(
             kv_compress_cache=cache.view(-1, 1, cache.shape[-1]),
             x=x.view(-1, x.shape[-1]),
@@ -1327,6 +1433,8 @@ class A5DeviceAdaptor(BaseDeviceAdaptor):
     @staticmethod
     def format_dsa_slot_mapping(slot_mapping, block_size):
         """A5: 1D pass-through."""
+        if dsv4_use_kv_bf16():
+            return BaseDeviceAdaptor.format_dsa_slot_mapping(slot_mapping, block_size)
         return slot_mapping
 
     @staticmethod

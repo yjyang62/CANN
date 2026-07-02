@@ -757,7 +757,7 @@ class AscendDSAMetadataBuilder(AttentionMetadataBuilder[AscendDSAMetadata]):
                     ori_win_left=self.model_config.hf_config.sliding_window - 1,
                     ori_win_right=0,
                     layout_q="TND",
-                    layout_kv="PA_ND",
+                    layout_kv=DeviceOperator.get_dsa_kv_layout(),
                     has_ori_kv=True,
                     has_cmp_kv=False,
                 )
@@ -785,7 +785,7 @@ class AscendDSAMetadataBuilder(AttentionMetadataBuilder[AscendDSAMetadata]):
                     ori_win_left=self.model_config.hf_config.sliding_window - 1,
                     ori_win_right=0,
                     layout_q="TND",
-                    layout_kv="PA_ND",
+                    layout_kv=DeviceOperator.get_dsa_kv_layout(),
                     has_ori_kv=True,
                     has_cmp_kv=True,
                 )
@@ -811,7 +811,7 @@ class AscendDSAMetadataBuilder(AttentionMetadataBuilder[AscendDSAMetadata]):
                     ori_win_left=self.model_config.hf_config.sliding_window - 1,
                     ori_win_right=0,
                     layout_q="TND",
-                    layout_kv="PA_ND",
+                    layout_kv=DeviceOperator.get_dsa_kv_layout(),
                     has_ori_kv=True,
                     has_cmp_kv=True,
                 )
@@ -987,7 +987,7 @@ class AscendDSAMetadataBuilder(AttentionMetadataBuilder[AscendDSAMetadata]):
                     ori_win_left=self.model_config.hf_config.sliding_window - 1,
                     ori_win_right=0,
                     layout_q="TND",
-                    layout_kv="PA_ND",
+                    layout_kv=DeviceOperator.get_dsa_kv_layout(),
                     has_ori_kv=True,
                     has_cmp_kv=False,
                 )
@@ -1015,7 +1015,7 @@ class AscendDSAMetadataBuilder(AttentionMetadataBuilder[AscendDSAMetadata]):
                     ori_win_left=self.model_config.hf_config.sliding_window - 1,
                     ori_win_right=0,
                     layout_q="TND",
-                    layout_kv="PA_ND",
+                    layout_kv=DeviceOperator.get_dsa_kv_layout(),
                     has_ori_kv=True,
                     has_cmp_kv=True,
                 )
@@ -1041,7 +1041,7 @@ class AscendDSAMetadataBuilder(AttentionMetadataBuilder[AscendDSAMetadata]):
                     ori_win_left=self.model_config.hf_config.sliding_window - 1,
                     ori_win_right=0,
                     layout_q="TND",
-                    layout_kv="PA_ND",
+                    layout_kv=DeviceOperator.get_dsa_kv_layout(),
                     has_ori_kv=True,
                     has_cmp_kv=True,
                 )
@@ -1206,7 +1206,7 @@ class AscendDSAMetadataBuilder(AttentionMetadataBuilder[AscendDSAMetadata]):
             ori_win_left=self.model_config.hf_config.sliding_window - 1,
             ori_win_right=0,
             layout_q="TND",
-            layout_kv="PA_ND",
+            layout_kv=DeviceOperator.get_dsa_kv_layout(),
             has_ori_kv=True,
             has_cmp_kv=False,
         )
@@ -1288,7 +1288,7 @@ class AscendDSAMetadataBuilder(AttentionMetadataBuilder[AscendDSAMetadata]):
             ori_win_left=self.model_config.hf_config.sliding_window - 1,
             ori_win_right=0,
             layout_q="TND",
-            layout_kv="PA_ND",
+            layout_kv=DeviceOperator.get_dsa_kv_layout(),
             has_ori_kv=True,
             has_cmp_kv=False,
         )
@@ -1946,12 +1946,12 @@ class AscendDSAImpl(DSAAttentionImpl):
                 sinks=self.attn_sink,
                 metadata=common_prefill_metadata.sas_metadata,
                 softmax_scale=self.softmax_scale,
-                cmp_ratio=max(self.compress_ratio, 1),
+                cmp_ratio=DeviceOperator.get_dsa_swa_only_cmp_ratio(),
                 ori_mask_mode=4,
                 ori_win_left=self.window_size - 1,
                 ori_win_right=0,
                 layout_q="TND",
-                layout_kv="PA_ND",
+                layout_kv=DeviceOperator.get_dsa_kv_layout(),
                 **extra_attn_kwargs,
             )[0]
 
@@ -2096,7 +2096,7 @@ class AscendDSAImpl(DSAAttentionImpl):
                     ori_win_left=self.window_size - 1,
                     ori_win_right=0,
                     layout_q="TND",
-                    layout_kv="PA_ND",
+                    layout_kv=DeviceOperator.get_dsa_kv_layout(),
                     **extra_attn_kwargs,
                 )[0]
             else:
@@ -2120,7 +2120,7 @@ class AscendDSAImpl(DSAAttentionImpl):
                     ori_win_left=self.window_size - 1,
                     ori_win_right=0,
                     layout_q="TND",
-                    layout_kv="PA_ND",
+                    layout_kv=DeviceOperator.get_dsa_kv_layout(),
                     **extra_attn_kwargs,
                 )[0]
         return attn_output
@@ -2378,12 +2378,12 @@ class AscendDSAImpl(DSAAttentionImpl):
                 sinks=self.attn_sink,
                 metadata=swa_decode_metadata.sas_metadata,
                 softmax_scale=self.softmax_scale,
-                cmp_ratio=max(self.compress_ratio, 1),
+                cmp_ratio=DeviceOperator.get_dsa_swa_only_cmp_ratio(),
                 ori_mask_mode=4,
                 ori_win_left=self.window_size - 1,
                 ori_win_right=0,
                 layout_q="TND",
-                layout_kv="PA_ND",
+                layout_kv=DeviceOperator.get_dsa_kv_layout(),
                 **extra_attn_kwargs,
             )[0]
         elif self.compress_ratio == 4:
@@ -2405,7 +2405,7 @@ class AscendDSAImpl(DSAAttentionImpl):
                 ori_win_left=self.window_size - 1,
                 ori_win_right=0,
                 layout_q="TND",
-                layout_kv="PA_ND",
+                layout_kv=DeviceOperator.get_dsa_kv_layout(),
                 **extra_attn_kwargs,
             )[0]
         else:
@@ -2426,7 +2426,7 @@ class AscendDSAImpl(DSAAttentionImpl):
                 ori_win_left=self.window_size - 1,
                 ori_win_right=0,
                 layout_q="TND",
-                layout_kv="PA_ND",
+                layout_kv=DeviceOperator.get_dsa_kv_layout(),
                 **extra_attn_kwargs,
             )[0]
         return attn_output

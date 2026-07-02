@@ -505,7 +505,7 @@ class AscendDSACPMetadataBuilder(AttentionMetadataBuilder[AscendDSAMetadata]):
             ori_win_left=self.model_config.hf_config.sliding_window - 1,
             ori_win_right=0,
             layout_q="TND",
-            layout_kv="PA_ND",
+            layout_kv=DeviceOperator.get_dsa_kv_layout(),
             has_ori_kv=True,
             has_cmp_kv=False,
         )
@@ -830,7 +830,7 @@ class AscendDSACPMetadataBuilder(AttentionMetadataBuilder[AscendDSAMetadata]):
                 ori_win_left=self.model_config.hf_config.sliding_window - 1,
                 ori_win_right=0,
                 layout_q="TND",
-                layout_kv="PA_ND",
+                layout_kv=DeviceOperator.get_dsa_kv_layout(),
                 has_ori_kv=True,
             )
 
@@ -1266,12 +1266,12 @@ class AscendDSACPImpl(DSAAttentionImpl):
             seqused_kv=local_seq_lengths_key,
             sinks=self.attn_sink,
             softmax_scale=self.softmax_scale,
-            cmp_ratio=max(self.compress_ratio, 1),
+            cmp_ratio=DeviceOperator.get_dsa_swa_only_cmp_ratio(),
             ori_mask_mode=4,
             ori_win_left=self.window_size - 1,
             ori_win_right=0,
             layout_q="TND",
-            layout_kv="PA_ND",
+            layout_kv=DeviceOperator.get_dsa_kv_layout(),
             **extra_attn_kwargs,
         )
 

@@ -110,12 +110,19 @@ def get_dsv4_compress_ratio(config: Any, layer_idx: int) -> int:
     return compress_ratios[layer_idx]
 
 
+@functools.cache
+def dsv4_use_kv_bf16() -> bool:
+    """Whether DSV4 on A5 should keep sparse MLA KV caches in BF16."""
+    return get_ascend_device_type() == AscendDeviceType.A5 and envs_ascend.VLLM_ASCEND_DSV4_KV_BF16
+
+
 def clear_enable_sp():
     global _ENABLE_SP
     _ENABLE_SP = None
     enable_dsa_cp.cache_clear()
     enable_dsa_cp_with_layer_shard.cache_clear()
     enable_dsa_cp_with_o_proj_tp.cache_clear()
+    dsv4_use_kv_bf16.cache_clear()
     _libc_getenv.cache_clear()
 
 
