@@ -35,6 +35,8 @@ from vllm_ascend.utils import AscendDeviceType, dsv4_use_kv_bf16, get_ascend_dev
 
 DSA_COMPRESSOR_SLOT_MAPPING_FLAT = 1
 DSA_COMPRESSOR_SLOT_MAPPING_BLOCK_OFFSET = 2
+# sparse_flash_mla on A5 BF16 path requires q N1=64; TP ranks hold local shards.
+_BF16_SPARSE_FLASH_MLA_NUM_HEADS_Q = 64
 
 if HAS_TRITON:
     from vllm_ascend.ops.triton.rms_norm import triton_q_rms  # noqa: F811
@@ -843,6 +845,44 @@ def _maybe_tensor_scalar_to_int(value):
     return value
 
 
+def _bf16_sparse_flash_mla_full_num_heads_q(num_heads_q: int) -> int:
+    """Map TP-local head count to the N1 value required by sparse_flash_mla."""
+    from vllm.distributed import get_tensor_model_parallel_world_size
+
+    tp_size = get_tensor_model_parallel_world_size()
+    if num_heads_q >= _BF16_SPARSE_FLASH_MLA_NUM_HEADS_Q:
+        return num_heads_q
+    if tp_size <= 1:
+        return num_heads_q
+    full_num_heads_q = num_heads_q * tp_size
+    return max(full_num_heads_q, _BF16_SPARSE_FLASH_MLA_NUM_HEADS_Q)
+
+
+def _bf16_all_gather_tp_heads(tensor: torch.Tensor, *, head_dim: int) -> torch.Tensor:
+    from vllm.distributed import get_tensor_model_parallel_world_size
+    from vllm.distributed.parallel_state import get_tp_group
+
+    tp_size = get_tensor_model_parallel_world_size()
+    if tp_size <= 1 or tensor.shape[head_dim] >= _BF16_SPARSE_FLASH_MLA_NUM_HEADS_Q:
+        return tensor
+
+    import torch.distributed as dist
+
+    gathered = [torch.empty_like(tensor) for _ in range(tp_size)]
+    dist.all_gather(gathered, tensor.contiguous(), group=get_tp_group().device_group)
+    return torch.cat(gathered, dim=head_dim)
+
+
+def _bf16_slice_tp_local_heads(tensor: torch.Tensor, local_num_heads: int, *, head_dim: int) -> torch.Tensor:
+    from vllm.distributed import get_tensor_model_parallel_rank
+
+    if tensor.shape[head_dim] == local_num_heads:
+        return tensor
+    tp_rank = get_tensor_model_parallel_rank()
+    start = tp_rank * local_num_heads
+    return tensor.narrow(head_dim, start, local_num_heads)
+
+
 def _bf16_sparse_flash_mla_metadata(**kwargs):
     if "seqused_kv" in kwargs:
         kwargs["seqused_ori_kv"] = kwargs.pop("seqused_kv")
@@ -854,6 +894,8 @@ def _bf16_sparse_flash_mla_metadata(**kwargs):
     for key in ("max_seqlen_q", "max_seqlen_ori_kv", "max_seqlen_cmp_kv"):
         if key in kwargs:
             kwargs[key] = _maybe_tensor_scalar_to_int(kwargs[key])
+    if "num_heads_q" in kwargs:
+        kwargs["num_heads_q"] = _bf16_sparse_flash_mla_full_num_heads_q(kwargs["num_heads_q"])
 
     metadata_op, _, accepts_device_kwarg = _get_bf16_sparse_flash_mla_ops()
     if not accepts_device_kwarg:
@@ -861,13 +903,31 @@ def _bf16_sparse_flash_mla_metadata(**kwargs):
     return metadata_op(**kwargs)
 
 
-def _bf16_sparse_flash_mla(*args, **kwargs):
+def _bf16_sparse_flash_mla(q, *args, **kwargs):
     if "seqused_kv" in kwargs:
         kwargs["seqused_ori_kv"] = kwargs.pop("seqused_kv")
     _bf16_add_cmp_kv_lengths(kwargs)
 
+    local_num_heads = q.shape[-2]
+    full_num_heads_q = _bf16_sparse_flash_mla_full_num_heads_q(local_num_heads)
+    need_tp_head_fixup = local_num_heads < full_num_heads_q
+    if need_tp_head_fixup:
+        q = _bf16_all_gather_tp_heads(q, head_dim=-2)
+        sinks = kwargs.get("sinks")
+        if sinks is not None and sinks.ndim == 1 and sinks.numel() < full_num_heads_q:
+            kwargs["sinks"] = _bf16_all_gather_tp_heads(sinks, head_dim=0)
+
     _, attn_op, _ = _get_bf16_sparse_flash_mla_ops()
-    return attn_op(*args, **kwargs)
+    outputs = attn_op(q, *args, **kwargs)
+    if not need_tp_head_fixup:
+        return outputs
+
+    if isinstance(outputs, tuple):
+        attn_out = _bf16_slice_tp_local_heads(outputs[0], local_num_heads, head_dim=-2)
+        if len(outputs) == 1:
+            return (attn_out,)
+        return (attn_out, *outputs[1:])
+    return _bf16_slice_tp_local_heads(outputs, local_num_heads, head_dim=-2)
 
 
 def _bf16_scatter_kv_cache(cache: torch.Tensor, x: torch.Tensor, slot_mapping: torch.Tensor) -> None:
