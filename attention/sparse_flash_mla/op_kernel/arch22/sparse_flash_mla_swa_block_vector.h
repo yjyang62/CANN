@@ -289,7 +289,7 @@ __aicore__ inline void SWAVectorBlock<SMLAT>::CopySinksIn()
     repeatParams.blockLen = constInfo.qHeadNum;
     repeatParams.srcStride = 0U;
     repeatParams.dstStride = 0U;
-    for (uint32_t i = 1U; i <= 256U / constInfo.qHeadNum; i++) {
+    for (uint32_t i = 1U; i < 256U / constInfo.qHeadNum; i++) {
         DataCopy(sinksBrcbUb[constInfo.qHeadNum * BLOCK_ELEMENT_NUM * i], sinksBrcbUb, repeatParams);
     }
     PipeBarrier<PIPE_V>();
