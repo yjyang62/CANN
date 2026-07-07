@@ -162,7 +162,11 @@ __aicore__ inline void ComputeSouterParam(RunParamStr& runParam, const ConstInfo
     }
 
     runParam.cubeMOuterOffset = cubeSOuterOffset * constInfo.gSize;
-    runParam.halfMRealSize = (runParam.mRealSize + 1) >> 1;
+    if (!IS_SPLIT_G && runParam.mRealSize <= 32U) {
+        runParam.halfMRealSize = runParam.mRealSize;
+    } else {
+        runParam.halfMRealSize = (runParam.mRealSize + 1) >> 1;
+    }
     runParam.firstHalfMRealSize = runParam.halfMRealSize;
     if (constInfo.subBlockIdx == 1) {
         runParam.halfMRealSize = runParam.mRealSize - runParam.halfMRealSize;
