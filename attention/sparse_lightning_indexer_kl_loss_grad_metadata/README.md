@@ -1,4 +1,4 @@
-# QuantLightningIndexerV2Metadata
+# SparseLightningIndexerKLLossGradMetadata
 
 ## 产品支持情况
 
@@ -13,7 +13,7 @@
 
 ## 功能说明
 
-- 算子功能：`QuantLightningIndexerV2Metadata`算子旨在生成一个任务列表，包含每个AIcore的Attention计算任务的起止点的Batch、Head、以及Q和K的分块的索引，供后续`QuantLightningIndexerV2`算子使用。
+- 算子功能：`SparseLightningIndexerKLLossGradMetadata`算子旨在根据`SparseLightningIndexerKLLossGrad`算子的输入shape、layout、mask和压缩比例信息，计算并输出分核切分metadata，供后续`SparseLightningIndexerKLLossGrad`算子使用。
 
 ## 参数说明
 
@@ -72,7 +72,7 @@
     <tr>
       <td>num_heads_q</td>
       <td>属性</td>
-      <td>表示Query的head个数，当前仅支持32/64。</td>
+      <td>表示Query的head个数，当前支持[1, 128]。</td>
       <td>INT32</td>
       <td>-</td>
     </tr>
@@ -92,15 +92,8 @@
     </tr>
     <tr>
       <td>topk</td>
-      <td>属性</td>
-      <td>表示从Query中筛选出的关键稀疏token的个数，当前仅支持[1, 2048]</td>
-      <td>INT32</td>
-      <td>-</td>
-    </tr>
-    <tr>
-      <td>quant_mode</td>
-      <td>属性</td>
-      <td>表示量化模式，当前仅支持1/2/4。1表示qk: fp8(e4m3) per-token-head, scale: fp32；2表示qk: int8 per-token-head, scale: fp16, w: fp16；4表示qk: hif8 per-tensor, scale: fp32。</td>
+      <td>可选属性</td>
+      <td>表示从Query中筛选出的关键稀疏token的个数，当前支持[1, 2048]和4096、8192。</td>
       <td>INT32</td>
       <td>-</td>
     </tr>
@@ -114,14 +107,14 @@
     <tr>
       <td>max_seqlen_q</td>
       <td>可选属性</td>
-      <td>表示Query的最长Sequence Length，-1表示任意可能长度，默认值为-1。</td>
+      <td>表示Query的最长Sequence Length，默认值为0。</td>
       <td>INT32</td>
       <td>-</td>
     </tr>
     <tr>
       <td>max_seqlen_k</td>
       <td>可选属性</td>
-      <td>表示Key的最长Sequence Length，-1表示任意可能长度，默认值为-1。</td>
+      <td>表示Key的最长Sequence Length，默认值为0。</td>
       <td>INT32</td>
       <td>-</td>
     </tr>
@@ -135,7 +128,7 @@
     <tr>
       <td>layout_k</td>
       <td>可选属性</td>
-      <td>表示Key的排列格式，支持BSND、TND、PA_BBND，默认值为BSND。</td>
+      <td>表示Key的排列格式，支持BSND、TND，默认值为BSND。</td>
       <td>STRING</td>
       <td>-</td>
     </tr>
@@ -156,18 +149,18 @@
     <tr>
       <td>metadata</td>
       <td>输出</td>
-      <td>表示负载均衡结果输出，shape固定为[1024]。</td>
+      <td>表示负载均衡结果输出，shape固定为[64]。</td>
       <td>INT32</td>
       <td>ND</td>
     </tr>
   </tbody>
   </table>
 
-  <ul><li><term>Ascend 950PR/Ascend 950DT</term> ：不支持quant_mode = 2。</li><li><term>Atlas A3 训练系列产品/Atlas A3 推理系列产品</term> ：不支持num_heads_q = 32，不支持quant_mode = 1/4，不支持layout_k = BSND/TND，不支持cmp_ratio在[1，128]任意取值，仅支持cmp_ratio = 1/2/4/8/16/32/64/128。</li><li><term>Atlas A2 训练系列产品/Atlas A2 推理系列产品</term> ：不支持num_heads_q = 32，不支持quant_mode = 1/4，不支持layout_k = BSND/TND，不支持cmp_ratio在[1，128]任意取值，仅支持cmp_ratio = 1/2/4/8/16/32/64/128。</li></ul>
+  <ul><li><term>Ascend 950PR/Ascend 950DT</term> ：topk仅支持[1, 2048]。</li><li><term>Atlas A3 训练系列产品/Atlas A3 推理系列产品</term> ：不支持seqused_q、seqused_k、cmp_residual_k，num_heads_q仅支持8/16/32/64，topk仅支持512/1024/2048/4096/8192。</li><li><term>Atlas A2 训练系列产品/Atlas A2 推理系列产品</term> ：不支持seqused_q、seqused_k、cmp_residual_k，num_heads_q仅支持8/16/32/64，topk仅支持512/1024/2048/4096/8192。</li></ul>
 
 ## 约束说明
 
-- QuantLightningIndexerV2Metadata算子需要与QuantLightningIndexerV2算子配套使用。
+- SparseLightningIndexerKLLossGradMetadata算子需要与SparseLightningIndexerKLLossGrad算子配套使用。
 - B（Batch）表示输入样本批量大小。
 - 参数cu_seqlens_q、cu_seqlens_k要求其值为当前Batch与前序Batch有效token数的累加值，后一个元素的值必须大于等于前一个元素的值。
 - 参数seqused_q、seqused_k要求其值表示每个Batch中的有效token数。
@@ -178,5 +171,5 @@
 
 | 调用方式  | 样例代码                                                     | 说明                                                         |
 | --------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| aclnn API | [test_aclnn_quant_lightning_indexer_v2_metadata](./examples/test_aclnn_quant_lightning_indexer_v2_metadata.cpp) | 通过[aclnnQuantLightningIndexerV2Metadata](./docs/aclnnQuantLightningIndexerV2Metadata.md)接口调用QuantLightningIndexerV2Metadata算子 |
-| PyTorch API | [test_torch_quant_lightning_indexer_v2_metadata](./examples/test_torch_quant_lightning_indexer_v2_metadata.py) | 通过[quant_lightning_indexer_metadata](../../torch_extension/cann_ops_transformer/docs/zh/quant_lightning_indexer.md)接口调用QuantLightningIndexerV2Metadata算子 |
+| aclnn API | [test_aclnn_sparse_lightning_indexer_kl_loss_grad_metadata](./examples/test_aclnn_sparse_lightning_indexer_kl_loss_grad_metadata.cpp) | 通过[aclnnSparseLightningIndexerKLLossGradMetadata](./docs/aclnnSparseLightningIndexerKLLossGradMetadata.md)接口调用SparseLightningIndexerKLLossGradMetadata算子。 |
+| PyTorch API | [test_torch_sparse_lightning_indexer_kl_loss_grad_metadata](./examples/test_torch_sparse_lightning_indexer_kl_loss_grad_metadata.py) | 通过[sparse_lightning_indexer_kl_loss_grad_metadata](../../torch_extension/cann_ops_transformer/docs/zh/sparse_lightning_indexer_kl_loss_grad.md)接口调用SparseLightningIndexerKLLossGradMetadata算子。 |

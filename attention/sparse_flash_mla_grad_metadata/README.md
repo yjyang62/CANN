@@ -1,4 +1,4 @@
-# MixedQuantSparseFlashMlaMetadata
+# SparseFlashMlaGradMetadata
 
 ## 产品支持情况
 
@@ -13,7 +13,7 @@
 
 ## 功能说明
 
-- 算子功能：`MixedQuantSparseFlashMlaMetadata`算子旨在生成一个任务列表，包含每个AIcore的Attention计算任务的起止点的Batch、Head、以及Q和K的分块的索引，供后续`MixedQuantSparseFlashMla`算子使用。
+- 算子功能：`SparseFlashMlaGradMetadata`算子旨在生成一个任务列表，包含每个AIcore的Attention计算任务的起止点的Batch、Head、以及Q和K的分块的索引，供后续`SparseFlashMlaGrad`算子使用。
 
 ## 参数说明
 
@@ -86,21 +86,21 @@
     <tr>
       <td>ori_topk_length</td>
       <td>可选输入</td>
-      <td>预留参数，当前不生效。</td>
+      <td>表示不同q token对应的ori_kv部分关键稀疏token的个数，shape为(B, S1, N2)或(T1, N2)。</td>
       <td>INT32</td>
       <td>ND</td>
     </tr>
     <tr>
       <td>cmp_topk_length</td>
       <td>可选输入</td>
-      <td>预留参数，当前不生效。</td>
+      <td>表示不同q token对应的cmp_kv部分关键稀疏token的个数，shape为(B, S1, N2)或(T1, N2)。</td>
       <td>INT32</td>
       <td>ND</td>
     </tr>
     <tr>
       <td>num_heads_q</td>
       <td>属性</td>
-      <td>表示Query的head个数，当前仅支持2/4/8/16/32/64/128。</td>
+      <td>表示Query的head个数，当前支持[1, 128]。</td>
       <td>INT32</td>
       <td>-</td>
     </tr>
@@ -115,13 +115,6 @@
       <td>head_dim</td>
       <td>属性</td>
       <td>表示注意力头的维度，当前仅支持512。</td>
-      <td>INT32</td>
-      <td>-</td>
-    </tr>
-    <tr>
-      <td>quant_mode</td>
-      <td>属性</td>
-      <td>表示量化模式，1表示K、V nope为per-token-group量化，scale类型为bfloat16，2表示K、V nope为per-token-group量化，scale类型为float8_e8m0。</td>
       <td>INT32</td>
       <td>-</td>
     </tr>
@@ -156,56 +149,49 @@
     <tr>
       <td>ori_topk</td>
       <td>可选属性</td>
-      <td>预留参数，当前不生效，表示ori_kv中筛选出的关键稀疏token的个数，0表示非稀疏场景，默认值为0，当前仅支持0。</td>
+      <td>表示ori_kv中筛选出的关键稀疏token的个数，0表示非稀疏场景，默认值为0。</td>
       <td>INT32</td>
       <td>-</td>
     </tr>
     <tr>
       <td>cmp_topk</td>
       <td>可选属性</td>
-      <td>表示cmp_kv中筛选出的关键稀疏token的个数，0表示非稀疏场景，默认值为0，当前仅支持512/1024。</td>
-      <td>INT32</td>
-      <td>-</td>
-    </tr>
-    <tr>
-      <td>rope_head_dim</td>
-      <td>可选属性</td>
-      <td>表示rope头的维度，默认值为64，当前仅支持64。</td>
+      <td>表示cmp_kv中筛选出的关键稀疏token的个数，0表示非稀疏场景，默认值为0。</td>
       <td>INT32</td>
       <td>-</td>
     </tr>
     <tr>
       <td>cmp_ratio</td>
       <td>可选属性</td>
-      <td>表示对cmp_kv的压缩率，默认值为1，当前仅支持1/4/128。</td>
+      <td>表示对cmp_kv的压缩率，默认值为1，当前支持[1, 128]。</td>
       <td>INT32</td>
       <td>-</td>
     </tr>
     <tr>
       <td>ori_mask_mode</td>
       <td>可选属性</td>
-      <td>表示q和ori_kv计算的mask模式，默认值为0，当前仅支持4，表示sliding window模式。</td>
+      <td>表示q和ori_kv计算的mask模式，0表示No mask，3表示rightDownCausal模式，4表示sliding window模式，默认值为0。</td>
       <td>INT32</td>
       <td>-</td>
     </tr>
     <tr>
       <td>cmp_mask_mode</td>
       <td>可选属性</td>
-      <td>表示q和cmp_kv计算的mask模式，默认值为0，当前仅支持3，表示rightDownCausal模式。</td>
+      <td>表示q和cmp_kv计算的mask模式，0表示No mask，3表示rightDownCausal模式，默认值为0。</td>
       <td>INT32</td>
       <td>-</td>
     </tr>
     <tr>
       <td>ori_win_left</td>
       <td>可选属性</td>
-      <td>表示q和ori_kv计算中q对过去token计算的数量，-1表示无穷大，默认值为-1，当前仅支持127。</td>
+      <td>表示q和ori_kv计算中q对过去token计算的数量，-1表示无穷大，默认值为-1。</td>
       <td>INT32</td>
       <td>-</td>
     </tr>
     <tr>
       <td>ori_win_right</td>
       <td>可选属性</td>
-      <td>表示q和ori_kv计算中q对未来token计算的数量，-1表示无穷大，默认值为-1，当前仅支持0。</td>
+      <td>表示q和ori_kv计算中q对未来token计算的数量，-1表示无穷大，默认值为-1。</td>
       <td>INT32</td>
       <td>-</td>
     </tr>
@@ -219,7 +205,7 @@
     <tr>
       <td>layout_kv</td>
       <td>可选属性</td>
-      <td>表示Key的排列格式，支持BSND、TND、PA_BBND，默认值为BSND。</td>
+      <td>表示Key的排列格式，支持BSND、TND，默认值为BSND。</td>
       <td>STRING</td>
       <td>-</td>
     </tr>
@@ -249,7 +235,7 @@
 
 ## 约束说明
 
-- MixedQuantSparseFlashMlaMetadata算子需要与MixedQuantSparseFlashMla算子配套使用。
+- SparseFlashMlaGradMetadata算子需要与SparseFlashMlaGrad算子配套使用。
 - B（Batch）表示输入样本批量大小。
 - 参数cu_seqlens_q、cu_seqlens_ori_kv及cu_seqlens_cmp_kv要求其值为当前Batch与前序Batch有效token数的累加值，后一个元素的值必须大于等于前一个元素的值。
 - 参数seqused_q、seqused_ori_kv、seqused_cmp_kv要求其值表示每个Batch中的有效token数。
@@ -260,5 +246,5 @@
 
 | 调用方式  | 样例代码                                                     | 说明                                                         |
 | --------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| aclnn API | [test_aclnn_mixed_quant_sparse_flash_mla_metadata](./examples/test_aclnn_mixed_quant_sparse_flash_mla_metadata.cpp) | 通过[aclnnMixedQuantSparseFlashMlaMetadata](./docs/aclnnMixedQuantSparseFlashMlaMetadata.md)接口调用MixedQuantSparseFlashMlaMetadata算子 |
-| PyTorch API | [test_torch_mixed_quant_sparse_flash_mla_metadata](./examples/test_torch_mixed_quant_sparse_flash_mla_metadata.py) | 通过[mixed_quant_sparse_flash_mla_metadata](../../torch_extension/cann_ops_transformer/docs/zh/mixed_quant_sparse_flash_mla.md)接口调用MixedQuantSparseFlashMlaMetadata算子 |
+| aclnn API | [test_aclnn_sparse_flash_mla_grad_metadata](./examples/test_aclnn_sparse_flash_mla_grad_metadata.cpp) | 通过[aclnnSparseFlashMlaGradMetadata](./docs/aclnnSparseFlashMlaGradMetadata.md)接口调用SparseFlashMlaGradMetadata算子。 |
+| PyTorch API | [test_torch_sparse_flash_mla_grad_metadata](./examples/test_torch_sparse_flash_mla_grad_metadata.py) | 通过[sparse_flash_mla_grad_metadata](../../torch_extension/cann_ops_transformer/docs/zh/sparse_flash_mla_grad.md)接口调用SparseFlashMlaGradMetadata算子。 |
