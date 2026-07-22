@@ -1343,6 +1343,9 @@ __aicore__ inline void MoeDistributeCombineV2<CombineMC2TypeFunc>::LocalWindowCo
             DataCopyPad(expandOutGlobal_[tokenIndex * axisH_ + tokenOffset], sumBufLocal, expandXCopyParams);
             if constexpr (HasAddRmsNorm) {
                 SyncFunc<AscendC::HardEvent::MTE3_V>();
+                // Align with separate residual add + rms_norm: RMS must see rounded residual.
+                Cast(sumFloatBufLocal_, sumBufLocal, AscendC::RoundMode::CAST_NONE, processLen);
+                PipeBarrier<PIPE_V>();
                 AddRmsNormRmsNormCompute(tokenIndex, tokenOffset, processLen, sumFloatBufLocal_, mulBufLocal_, gammaLocal,
                                 expandXCopyParams);
             }

@@ -143,6 +143,9 @@ private:
             PipeBarrier<PIPE_V>();
             Cast(xLocal, x1_fp32, RoundMode::CAST_RINT, numCol);
             PipeBarrier<PIPE_V>();
+            // Align with separate residual add + rms_norm: RMS must see rounded BF16 residual.
+            Cast(x1_fp32, xLocal, RoundMode::CAST_NONE, numCol);
+            PipeBarrier<PIPE_V>();
         }
         inQueueX.FreeTensor(x1Local);
 
